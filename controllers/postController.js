@@ -15,7 +15,8 @@ exports.getPosts = async (req, res) => {
       posts = await postModel.getAllPostsByCategory(category_id);
     }
     else{
-      [posts] = await db.query('SELECT * FROM posts');
+      const result = await db.query('SELECT * FROM posts ORDER BY id DESC');
+      posts = result.rows;
     }
     res.json(posts);
   } catch (err) {
@@ -35,6 +36,7 @@ exports.getPostById = async (req, res) => {
 };
 
 exports.createPost = async (req, res) => {
+  let client;
   try {
     const { 
       title, 
@@ -49,64 +51,79 @@ exports.createPost = async (req, res) => {
           : [req.files.newImages]
       : [];
 
-    const [postResult] = await db.query(
-      'INSERT INTO posts (title, content, author_id) VALUES (?,?,?)',
-      [
-        title, 
-        content, 
-        author_id,
-      ]
+    client = await db.connect();
+    await client.query('BEGIN');
+
+    const postResult = await client.query(
+      'INSERT INTO posts (title, content, author_id) VALUES ($1, $2, $3) RETURNING id',
+      [title, content, author_id]
     );
 
-    // contver string array to real array
-    const categoriesParse = JSON.parse(categories);
-    const categoriesArray = categoriesParse
-      ? Array.isArray(categoriesParse)
-          ? categoriesParse
-          : [categoriesParse]
-      : [];
-    if(categoriesArray){
-      categoriesParse.map(async(category_id)=>{
-        await postCategoryModel.create({
-          post_id: postResult.insertId,
-          category_id
-        });
-      })
+    const postId = postResult.rows[0].id;
+
+    let categoriesArray = [];
+    if (categories) {
+      const categoriesParse = JSON.parse(categories);
+      categoriesArray = Array.isArray(categoriesParse)
+        ? categoriesParse
+        : [categoriesParse];
     }
 
+    if (categoriesArray.length > 0) {
+      const categoryValues = categoriesArray.map(category_id => [postId, category_id]);
+      
+      for (const category_id of categoriesArray) {
+        await client.query(
+          'INSERT INTO post_category (post_id, category_id) VALUES ($1, $2)',
+          [postId, category_id]
+        );
+      }
+    }
 
-    await Promise.all(
-      images?.map(async (image)=>{
+    if (images.length > 0) {
+      await Promise.all(
+        images.map(async (image) => {
+          const base64Image = `data:${image.mimetype};base64,${image.data.toString('base64')}`;
+          const result = await cloudinary.uploader.upload(base64Image, {
+            folder: 'posts',
+            use_filename: true,
+            unique_filename: false,
+          });
+          const imageUrl = result.secure_url;
 
-        const base64Image = `data:${image.mimetype};base64,${image.data.toString('base64')}`;
-        const result = await cloudinary.uploader.upload(base64Image, {
-          folder: 'posts',
-          use_filename: true,
-          unique_filename: false,
-        });
-        imageUrl = result.secure_url;
+          const imageResult = await client.query(
+            'INSERT INTO images (url) VALUES ($1) RETURNING id',
+            [imageUrl]
+          );
+          const imageId = imageResult.rows[0].id;
 
-        const imageResult = await imageModel.create({url:imageUrl});
-        
-        await entity_imageModel.create({
-          entity_type:"posts",
-          entity_id:postResult.insertId,
-          image_id:imageResult.id
+          await client.query(
+            'INSERT INTO entity_image (entity_type, entity_id, image_id) VALUES ($1, $2, $3)',
+            ['posts', postId, imageId]
+          );
         })
+      );
+    }
 
-      })
-    );
+    await client.query('COMMIT');
 
     res.json({
-      id: postResult.insertId,
+      id: postId,
       title, 
       content, 
-      author_id, 
+      author_id,
     });
 
   } catch (err) {
+    if (client) {
+      await client.query('ROLLBACK');
+    }
     console.error(err);
-    res.status(500).json({ error: `Error creating post: ${err}` });
+    res.status(500).json({ error: `Error creating post: ${err.message}` });
+  } finally {
+    if (client) {
+      client.release();
+    }
   }
 };
 

@@ -1,45 +1,72 @@
 const db = require('../config/db');
 
+const allowedFields = ['id', 'name'];
+
 const getAll = async () => {
-  const [rows] = await db.query('SELECT * FROM authors ORDER BY id DESC');
-  return rows;
+  const result = await db.query(
+    'SELECT * FROM authors ORDER BY id DESC'
+  );
+  return result.rows;
 };
 
-const get = async (field,value) => {
+const get = async (field, value) => {
+
+  if (!allowedFields.includes(field)) {
+    throw new Error('Invalid field');
+  }
+
   const query = `
     SELECT
       p.*,
       (
-          SELECT JSON_ARRAYAGG(i.url)
-          FROM entity_image AS e
-          INNER JOIN images AS i ON e.image_id = i.id
-          WHERE e.entity_type = 'authors' AND e.entity_id = p.id
+        SELECT json_agg(i.url)
+        FROM entity_image e
+        JOIN images i ON e.image_id = i.id
+        WHERE e.entity_type = 'authors'
+          AND e.entity_id = p.id
       ) AS cover
-    FROM authors AS p
-    WHERE p.${field} = ?;
+    FROM authors p
+    WHERE p.${field} = $1
   `;
-  const [rows] = await db.query(query, [value]);
-  return rows;
-}
 
-const getAllBy = async (field,value) => {
-  const query = `SELECT * FROM authors WHERE ${field} = ? ORDER BY id DESC`;
-  const [rows] = await db.query(query, [value]);
-  return rows;
+  const result = await db.query(query, [value]);
+  return result.rows;
 };
 
+const getAllBy = async (field, value) => {
 
-const create = async ({name,description}) => {
-  const [result] = await db.query(
-    'INSERT INTO authors (name,description) VALUES (?, ?)',
-    [name,description]
+  if (!allowedFields.includes(field)) {
+    throw new Error('Invalid field');
+  }
+
+  const query = `
+    SELECT * FROM authors
+    WHERE ${field} = $1
+    ORDER BY id DESC
+  `;
+
+  const result = await db.query(query, [value]);
+  return result.rows;
+};
+
+const create = async ({ name, description }) => {
+
+  const result = await db.query(
+    `INSERT INTO authors (name, description)
+     VALUES ($1, $2)
+     RETURNING id`,
+    [name, description]
   );
-  return { id: result.insertId, name, description};
+
+  return { id: result.rows[0].id, name, description };
 };
 
 const update = async (id, { name, description }) => {
+
   await db.query(
-    'UPDATE authors SET name = ? , description = ? WHERE id = ?',
+    `UPDATE authors
+     SET name = $1, description = $2
+     WHERE id = $3`,
     [name, description, id]
   );
 
@@ -47,14 +74,16 @@ const update = async (id, { name, description }) => {
 };
 
 const deleteAuthor = async (id) => {
-  await db.query('DELETE FROM authors WHERE id = ?', [id]);
+  await db.query(
+    'DELETE FROM authors WHERE id = $1',
+    [id]
+  );
 };
 
-
-module.exports = { 
+module.exports = {
   get,
-  getAll, 
-  getAllBy, 
+  getAll,
+  getAllBy,
   create,
   update,
   deleteAuthor
