@@ -23,7 +23,6 @@ const initOnConnect = async () => {
   try {
     console.log("✅ PostgreSQL connected");
     
-    if (process.env.NODE_ENV === 'development' || process.env.INIT_DB === 'true') {
       console.log("🔄 Initializing database tables...");
       
       await client.query(`
@@ -116,7 +115,6 @@ const initOnConnect = async () => {
       `);
       
       console.log("✅ Database tables created successfully");
-    }
   } catch (err) {
     console.error("❌ Database initialization error:", err.message);
   } finally {
