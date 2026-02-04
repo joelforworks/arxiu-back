@@ -1,0 +1,69 @@
+DROP TABLE IF EXISTS entity_image;
+DROP TABLE IF EXISTS post_category;
+DROP TABLE IF EXISTS posts;
+DROP TABLE IF EXISTS images;
+DROP TABLE IF EXISTS authors;
+DROP TABLE IF EXISTS categories;
+DROP TABLE IF EXISTS users;
+
+CREATE TABLE users (
+  id INT NOT NULL AUTO_INCREMENT,
+  username VARCHAR(50) NOT NULL,
+  password VARCHAR(255) NOT NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY username (username)
+);
+
+INSERT INTO users VALUES
+(1,'user','password');
+
+CREATE TABLE categories (
+  id INT NOT NULL AUTO_INCREMENT,
+  name VARCHAR(255) NOT NULL,
+  PRIMARY KEY (id)
+);
+
+CREATE TABLE authors (
+  id INT NOT NULL AUTO_INCREMENT,
+  name VARCHAR(255) NOT NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  description VARCHAR(255),
+  PRIMARY KEY (id)
+);
+
+CREATE TABLE images (
+  id INT NOT NULL AUTO_INCREMENT,
+  url VARCHAR(255) NOT NULL,
+  alt_text VARCHAR(255),
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id)
+);
+
+CREATE TABLE posts (
+  id INT NOT NULL AUTO_INCREMENT,
+  title VARCHAR(255) NOT NULL,
+  content LONGTEXT,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  author_id INT,
+  PRIMARY KEY (id),
+  FOREIGN KEY (author_id) REFERENCES authors(id)
+);
+
+CREATE TABLE post_category (
+  id INT NOT NULL AUTO_INCREMENT,
+  post_id INT NOT NULL,
+  category_id INT NOT NULL,
+  PRIMARY KEY (id),
+  FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE,
+  FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE CASCADE
+);
+
+CREATE TABLE entity_image (
+  id INT NOT NULL AUTO_INCREMENT,
+  entity_type VARCHAR(255) NOT NULL,
+  entity_id INT NOT NULL,
+  image_id INT NOT NULL,
+  PRIMARY KEY (id),
+  FOREIGN KEY (image_id) REFERENCES images(id) ON DELETE CASCADE
+);
