@@ -123,6 +123,6 @@ const initOnConnect = async () => {
 };
 
 // Initialize on startup
-initOnConnect().catch(console.error);
+//initOnConnect().catch(console.error);
 
 module.exports = pool;
