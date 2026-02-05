@@ -9,7 +9,10 @@ const get = async (field,value) => {
   const query = `
     SELECT 
       p.*,
-      GROUP_CONCAT(DISTINCT CONCAT(i.id, ':', i.url) SEPARATOR ',') AS images,
+      GROUP_CONCAT(
+        DISTINCT IF(i.id IS NOT NULL, CONCAT(i.id, '||', i.url), NULL)
+        SEPARATOR ','
+      ) AS images,
       GROUP_CONCAT(DISTINCT pc.category_id SEPARATOR ',') AS categories
     FROM posts AS p
     LEFT JOIN entity_image AS e 
@@ -21,33 +24,27 @@ const get = async (field,value) => {
     WHERE p.${field} = ?
     GROUP BY p.id;
   `;
- const [rows] = await db.query(query, [value]);
+  const [rows] = await db.query(query, [value]);
 
   rows.forEach(post => {
 
-      // IMAGES
-      if (post.images && post.images.length > 0) {
-        post.images = post.images.split(',').map(str => {
-          const [id, url] = str.split(':');
-          return {
-            id: Number(id),
-            url
-          };
-        });
-      } else {
-        post.images = [];
-      }
-
-      // CATEGORIES
-      if (post.categories && post.categories.length > 0) {
-        post.categories = post.categories
+    // IMAGES
+    post.images = post.images
+      ? post.images
           .split(',')
-          .map(id => Number(id));
-      } else {
-        post.categories = [];
-      }
+          .map(str => {
+            const [id, url] = str.split('||');
+            return id && url ? { id: Number(id), url } : null;
+          })
+          .filter(Boolean)
+      : [];
 
-    });
+    // CATEGORIES
+    post.categories = post.categories
+      ? post.categories.split(',').map(id => Number(id))
+      : [];
+
+  });
   return rows;
 }
 
