@@ -30,7 +30,7 @@ exports.getPostById = async (req, res) => {
     if (!post.length) return res.status(404).json({ error: 'Post not found' });
     res.json(post[0]);
   } catch (err) {
-    res.status(500).json({ error: 'Error fetching post' });
+    res.status(500).json({ error: `Error fetching posts ${err}` });
   }
 };
 

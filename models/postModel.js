@@ -7,29 +7,47 @@ const getAllPosts = async () => {
 
 const get = async (field,value) => {
   const query = `
-    SELECT
+    SELECT 
       p.*,
-      (
-          SELECT JSON_ARRAYAGG(
-            JSON_OBJECT(
-              'id', i.id,
-              'url', i.url
-            )
-          )
-          FROM entity_image AS e
-          INNER JOIN images AS i ON e.image_id = i.id
-          WHERE e.entity_type = 'posts' AND e.entity_id = p.id
-      ) AS images,
-      (
-        SELECT JSON_ARRAYAGG(c.id)
-        FROM post_category AS pc
-        INNER JOIN categories AS c ON pc.category_id = c.id
-        WHERE pc.post_id = p.id
-      ) AS categories
+      GROUP_CONCAT(DISTINCT CONCAT(i.id, ':', i.url) SEPARATOR ',') AS images,
+      GROUP_CONCAT(DISTINCT pc.category_id SEPARATOR ',') AS categories
     FROM posts AS p
-    WHERE p.${field} = ?;
+    LEFT JOIN entity_image AS e 
+           ON e.entity_type = 'posts' AND e.entity_id = p.id
+    LEFT JOIN images AS i 
+           ON e.image_id = i.id
+    LEFT JOIN post_category AS pc 
+           ON pc.post_id = p.id
+    WHERE p.${field} = ?
+    GROUP BY p.id;
   `;
-  const [rows] = await db.query(query, [value]);
+ const [rows] = await db.query(query, [value]);
+
+  rows.forEach(post => {
+
+      // IMAGES
+      if (post.images && post.images.length > 0) {
+        post.images = post.images.split(',').map(str => {
+          const [id, url] = str.split(':');
+          return {
+            id: Number(id),
+            url
+          };
+        });
+      } else {
+        post.images = [];
+      }
+
+      // CATEGORIES
+      if (post.categories && post.categories.length > 0) {
+        post.categories = post.categories
+          .split(',')
+          .map(id => Number(id));
+      } else {
+        post.categories = [];
+      }
+
+    });
   return rows;
 }
 
